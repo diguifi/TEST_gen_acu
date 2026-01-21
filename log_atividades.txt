@@ -1,0 +1,39 @@
+DIA 1 (19h - 22h)
+- Instalei SDK do .NET 10, última versão com LTS
+- Ao analisar as dependências do projeto (QuickFixn) decidi implementar com .NET 8 mesmo, devido a compatibilidade.
+- Estudando a documentação da engine/lib QuickFixn, tomei conhecimento tanto do protocolo FIX, quanto da forma que ele é implementado em uma aplicação C#, basicamente o OrderGenerator seria um Initiator e o OrderAccumulator seria o Acceptor
+- Devido a natureza assíncrona e baseada em tempo real do protocolo FIX, decidi que a comunicação front-back deveria ser com Websockets e não com REST. Minha experiência com websockets se resume a alguns jogos online que criei como hobby.
+- Como nunca tive contato com o protocolo FIX, nem com a lib quickfixn, decidi começar simples e fazer alguns testes com os exemplos na documentação oficial.
+- Depois de entender a importância e a estrutura base dos arquivos de configuração (tanto os .cfg de cada serviço quanto o FIX44.xml que acompanha o nuget) consegui executar projetos de console de exemplo, inserindo logs explorando comportamentos.
+- Depois de uns testes, resolvi começar o desafio gerando um projeto de console para o OrderAcumulator e um projeto web para o OrderGenerator, com as devidas configurações FIX e com os pacotes QuickFIXn.Core e QuickFIXn.FIX44, com uma estrutura básica de comunicação, sem regras de negócio e consegui uma comunicação básica.
+- Como um desafio extra, pra fechar o dia, tentei fazer um frontend simples, sem nenhum framework, que enviasse um formulário com infos de teste mockadas, converti o projeto C# do OrderGenerator para receber e mapear uma conexão Websocket, no lugar de REST, e consegui gerar um fluxo completo básico entre: front (ws)-> ordergenerator (FIX)-> orderacumulator
+- Porém tive algum problema que no retorno do orderacumulator, meu método FromApp do ordergenerator não estava sendo chamado, apesar dos SessionIDs das configs estarem corretos.
+- Pesquisando descobri a importância da sequencia de ordens, e para fins de teste utilizei a config ResetOnLogon=Y, para evitar gaps de sequência nos testes. No entanto, sem sucesso no retorno, dormi derrotado
+
+DIA 2 (21h - 23h)
+- Resolvi tentar observar melhor os logs gerados e encontrei uma extensão do vscode chamada "FIX Master" que deixa os logs de mensagens mais legíveis, parecia tudo em ordem, porém no order generator só era gerado um log de envio mas nenhum de recebimento, e no accumulator era gerado um de recebimento (newordersingle) e um de envio (executionreport), de alguma forma o execution report não está chegando de volta pro order generator.
+- É difícil encontrar informações online, me parece que FIX + .NET é um assunto bem nichado e nem IA está conseguindo me dar uma direção útil, fica batendo em teclas que já foram implementadas e analisadas, ta feia a coisa
+- Decidi tentar usar o MessageCracker (não sei se é boa prática) pra ver se o retorno seria interceptado pelo OnMessage, mas também, sem sucesso
+- Resolvi implementar a regra de negócio descrita no desafio, para exposição, e espairar a cabeça desse problema de retorno.
+- Baixei novamente os exemplos TradeClient e Executor da documentação pra validar a comunicação e ambos funcionam perfeitamente, apesar dos arquivos estarem muito semelhantes aos meus, tristeza.
+- Decidi que vou usar o exemplo e tentar inserir nele meu código, aos poucos, e ir testando pra descobrir o que quebra o fluxo (caramba será que foi minha ideia de usar websockets? as vezes existe algum problema de compatibilidade executando os dois protocolos de socket na maquina, ou algum macete que não conheço pra isso ser implementado?)
+- Incorporei o meu código do Acceptor no Código do Executor da documentação e já ficou tarde, preciso dormir, derrotado novamente
+
+DIA 3 (20h - 23h)
+- Substituí aos poucos no executor, sempre debugando e notei que consegui retorno no initiator, talvez o problema fosse na forma que fiz o initiator, hora de validar.
+- Primeiro eu mockei a mensagem, bem aos poucos, tudo certo, depois tentei implementar um fluxo pra aguardar logon (sem usar readline do console, mas sim uma task especifica pra isso), de alguma forma não recebi o retorno, será que era isso?
+- INACREDITAVEL, está funcionando, vou tentar validar essa mudança na minha implementação pessoal (sem usar as bases dos exemplos da documentação): FUNCIONOU KKKKK meu deus do ceu, vou deixar a parte do código que estava destruindo o funcionamento comentada pra vocês verem o que era.
+- Olhando pelo lado positivo, esse problema me ajudou a me aprofundar em vários aspectos da comunicação FIX, o funcionamento do DataDictionary, a estrutura das mensagens pra cada tipo de comando, o salvamento de logs, a ordem de envio (parametro 34), as configurações (cfg) dos atores FIX, etc... 
+- Agora finalmente tenho um MVP, como gosto de fazer com projetos pessoais, quando tenho um MVP eu inicio o repositório git (pra evitar varios commits "sujos" no inicio do projeto, mas isso é uma preferencia pessoal, na maioria das empresas que trabalhei, o repo começa na pasta zerada mesmo)
+
+DIA 4 (21h - 23h)
+- Hora de estruturar melhor meus projetos, vou começar com o front pra mudar um pouco os ares, escolhi Vue por ser o framework de front que mais me identifico e já tive experiência profissional, cortando a etapa de curva de aprendizado (apesar que mexia com Vue 2, e estamos no Vue 3, mas creio que seja tranquilo)
+- Por mais estranho que pareça, dado meu historico profissional focado em backend, eu acho bem relaxante e divertido codar pra web, seja com js ou ts (exceto css). Fiz uma tela simples, com componentização básica, que faz o que precisamos pro desafio.
+- No PDF a descrição do formulário de resposta é "No resultado do formulário, apresentar a resposta da requisição. " sem um detalhamento específico então vou tomar alguma liberdade criativa aqui e exibi os principais campos seguros e um log de conexão.
+
+DIA 5 (19h - 21h)
+- Finalmente dia de estruturar o servidor. Vou começar dividindo responsabilidades no OrderGenerator. Toda decisão tomada aqui é pura liberdade criativa, não vou complicar muito devido ao tempo curto, amanhã já é a data limite, mas vou fazer o básico bem feito.
+- Não vou dividir camadas, multilayer nem nada do tipo, mas vou criar um projeto isolado pra testes. Acho que testes são uma ferramenta importantíssima, e mesmo esse projeto sendo bem simples, acho legal ter pelo menos uma cobertura básica. Sou adepto de TDD, mas como tudo nesse desafio era muito novo pra mim, eu nem sabia como fazer um "teste que quebra", então por isso deixei os testes por último nesse caso.
+- No OrderAccumulator não vou complicar nada, vou só fazer testes que validem a regra do desafio mesmo. Confesso que estou começando a ficar cansado de sair do trabalho e "trabalhar" mais no desafio.
+- Vou fazer um readme na raiz do projeto descrevendo como executar cada parte.
+- Sei que tem muita coisa que da pra melhorar, mas acho que pra um pequeno teste técnico está aceitável e consigo entregar com um dia de antecedência. Se leu até aqui, muito obrigado pelo interesse na minha linha de pensamento. Acho que (principalmente hoje em dia, na era da IA) o trabalho de um bom dev não é escrever texto e saber linguagens, mas sim, saber pensar, arquitetar planos, contornar problemas, raciocinar. Escrever texto qualquer IA escreve, raciocinar ainda é um privilégio humano e por isso enxerguei importância em registrar tudo.
